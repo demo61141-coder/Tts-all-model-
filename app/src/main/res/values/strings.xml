@@ -1,0 +1,26 @@
+<resources>
+    <string name="app_name">বাংলা ভয়েস স্টুডিও</string>
+    <string name="subtitle_studio">অফলাইন বাংলা টিটিএস ও অডিও জেনারেশন স্টুডিও</string>
+    <string name="tab_studio">স্টুডিও</string>
+    <string name="tab_models">মডেল ও ভয়েস</string>
+    <string name="tab_settings">সেটিংস ও এক্সপোর্ট</string>
+    <string name="voice_elevenlabs">ElevenLabs (প্রধান কণ্ঠ)</string>
+    <string name="voice_kiki">সংবাদ (Kiki)</string>
+    <string name="btn_download">ডাউনলোড</string>
+    <string name="btn_generate">অডিও তৈরি করুন (Generate)</string>
+    <string name="btn_play">চালান (Play)</string>
+    <string name="btn_stop">থামান (Stop)</string>
+    <string name="btn_save">সেভ করুন (Save WAV)</string>
+    <string name="btn_share">শেয়ার ও সিঙ্ক (Share)</string>
+    <string name="btn_paste">পেস্ট করুন</string>
+    <string name="btn_pick_txt">.txt ফাইল খুলুন</string>
+    <string name="btn_clear">মুছুন</string>
+    <string name="btn_sample_news">সংবাদ নমুনা</string>
+    <string name="btn_sample_story">গল্প নমুনা</string>
+    <string name="hint_input_text">এখানে বাংলা টেক্সট লিখুন বা পেস্ট করুন…</string>
+    <string name="label_speed">গতি (Speed):</string>
+    <string name="label_voice_select">কণ্ঠ নির্বাচন (Voice Selector):</string>
+    <string name="status_ready">প্রস্তুত — টেক্সট লিখে Generate চাপুন</string>
+    <string name="notif_channel_name">বাংলা টিটিএস ব্যাকগ্রাউন্ড সার্ভিস</string>
+    <string name="notif_generating">অডিও তৈরি হচ্ছে…</string>
+</resources>

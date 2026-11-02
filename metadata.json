@@ -1,0 +1,6 @@
+{
+  "name": "বাংলা ভয়েস স্টুডিও",
+  "description": "অফলাইন বাংলা টেক্সট-টু-স্পিচ (TTS) অডিও জেনারেশন স্টুডিও — ElevenLabs ও সংবাদ (Kiki) ভয়েস মডেল, রিয়েল-টাইম স্ট্রিমিং এবং ব্যাকগ্রাউন্ড প্রসেসিং সহ।",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

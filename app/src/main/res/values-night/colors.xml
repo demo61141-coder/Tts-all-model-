@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg_main">#0B1120</color>
+    <color name="bg_surface">#1E293B</color>
+    <color name="bg_card">#1E293B</color>
+    <color name="bg_card_elevated">#334155</color>
+    <color name="bg_input">#0F172A</color>
+    <color name="border_subtle">#334155</color>
+    <color name="text_primary">#F8FAFC</color>
+    <color name="text_secondary">#CBD5E1</color>
+    <color name="text_muted">#94A3B8</color>
+    <color name="accent_primary">#14B8A6</color>
+    <color name="accent_primary_dark">#0D9488</color>
+    <color name="accent_light_tint">#134E4A</color>
+    <color name="accent_secondary">#6366F1</color>
+    <color name="accent_amber">#F59E0B</color>
+    <color name="accent_amber_bg">#451A03</color>
+    <color name="accent_danger">#EF4444</color>
+    <color name="accent_danger_bg">#450A0A</color>
+    <color name="accent_success">#22C55E</color>
+    <color name="accent_success_bg">#052E16</color>
+    <color name="text_on_accent">#FFFFFF</color>
+</resources>
