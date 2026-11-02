@@ -6,7 +6,7 @@
     android:background="@color/bg_main"
     android:orientation="vertical">
 
-    <!-- Top App Bar & Navigation Menu -->
+    <!-- Top App Bar, Language Switcher & Navigation Menu -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -36,7 +36,7 @@
                     android:layout_height="wrap_content"
                     android:text="বাংলা ভয়েস স্টুডিও"
                     android:textColor="@color/text_primary"
-                    android:textSize="20sp"
+                    android:textSize="19sp"
                     android:textStyle="bold" />
 
                 <TextView
@@ -46,21 +46,37 @@
                     android:layout_marginTop="2dp"
                     android:text="অফলাইন বাংলা টিটিএস ও অডিও জেনারেশন স্টুডিও"
                     android:textColor="@color/text_secondary"
-                    android:textSize="12sp" />
+                    android:textSize="11sp" />
             </LinearLayout>
+
+            <!-- Language Toggle Button (বাংলা / English) -->
+            <Button
+                android:id="@+id/btnLanguageToggle"
+                android:layout_width="wrap_content"
+                android:layout_height="38dp"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/bg_btn_secondary"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:stateListAnimator="@null"
+                android:text="🌐 English"
+                android:textAllCaps="false"
+                android:textColor="@color/accent_primary"
+                android:textSize="12sp"
+                android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/tvLoadedRamBadge"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:background="@drawable/bg_badge_teal"
-                android:paddingStart="10dp"
+                android:paddingStart="8dp"
                 android:paddingTop="5dp"
-                android:paddingEnd="10dp"
+                android:paddingEnd="8dp"
                 android:paddingBottom="5dp"
-                android:text="অফলাইন ইঞ্জিন"
+                android:text="RAM: খালি"
                 android:textColor="@color/accent_primary_dark"
-                android:textSize="11sp"
+                android:textSize="10sp"
                 android:textStyle="bold" />
         </LinearLayout>
 
@@ -122,7 +138,7 @@
                 android:layout_weight="1"
                 android:background="@drawable/bg_tab_unselected"
                 android:stateListAnimator="@null"
-                android:text="সেটিংস"
+                android:text="সেটিংস ও গাইড"
                 android:textAllCaps="false"
                 android:textColor="@color/text_secondary"
                 android:textSize="12sp"
@@ -144,7 +160,7 @@
             android:orientation="vertical"
             android:padding="16dp">
 
-            <!-- BENGALI ERROR / ALERT BANNER (Shown on any download, load, or synthesis error) -->
+            <!-- BENGALI / ENGLISH ERROR BANNER -->
             <LinearLayout
                 android:id="@+id/layoutErrorBanner"
                 android:layout_width="match_parent"
@@ -199,7 +215,7 @@
                 </LinearLayout>
             </LinearLayout>
 
-            <!-- MANDATORY FIRST-RUN DOWNLOAD PROGRESS BANNER -->
+            <!-- DOWNLOAD PROGRESS BANNER -->
             <LinearLayout
                 android:id="@+id/layoutDownloadBanner"
                 android:layout_width="match_parent"
@@ -265,6 +281,7 @@
                         android:padding="10dp">
 
                         <TextView
+                            android:id="@+id/tvLabelStatChars"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="অক্ষর ও শব্দ"
@@ -292,6 +309,7 @@
                         android:padding="10dp">
 
                         <TextView
+                            android:id="@+id/tvLabelStatChunks"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="বাক্য খণ্ড (Pieces)"
@@ -319,6 +337,7 @@
                         android:padding="10dp">
 
                         <TextView
+                            android:id="@+id/tvLabelStatVoice"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="সক্রিয় কণ্ঠ"
@@ -337,7 +356,7 @@
                     </LinearLayout>
                 </LinearLayout>
 
-                <!-- Voice Selector Card (Two Voices in One App) -->
+                <!-- Voice Selector & Model Switcher Card (Two Voices in One App) -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -347,15 +366,72 @@
                     android:padding="14dp">
 
                     <TextView
+                        android:id="@+id/tvLabelVoiceSelector"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="কণ্ঠ নির্বাচন (Voice Selector)"
+                        android:text="কণ্ঠ নির্বাচন ও সুইচ (Voice Model Switcher)"
                         android:textColor="@color/text_primary"
                         android:textSize="14sp"
                         android:textStyle="bold" />
 
+                    <!-- Quick Switch Bar shown when BOTH models are downloaded -->
+                    <LinearLayout
+                        android:id="@+id/layoutQuickModelSwitch"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:background="@drawable/bg_card_elevated"
+                        android:orientation="vertical"
+                        android:padding="8dp"
+                        android:visibility="gone">
+
+                        <TextView
+                            android:id="@+id/tvQuickSwitchHint"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="দুইটি মডেলই ডাউনলোড করা আছে — কোনটি দিয়ে অডিও জেনারেট করবেন তা ট্যাপ করে সুইচ করুন:"
+                            android:textColor="@color/accent_primary"
+                            android:textSize="11sp"
+                            android:textStyle="bold" />
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:orientation="horizontal">
+
+                            <Button
+                                android:id="@+id/btnQuickSwitchEleven"
+                                android:layout_width="0dp"
+                                android:layout_height="42dp"
+                                android:layout_weight="1"
+                                android:background="@drawable/bg_tab_selected"
+                                android:stateListAnimator="@null"
+                                android:text="🎙️ ElevenLabs"
+                                android:textAllCaps="false"
+                                android:textColor="@color/text_on_accent"
+                                android:textSize="13sp"
+                                android:textStyle="bold" />
+
+                            <Button
+                                android:id="@+id/btnQuickSwitchKiki"
+                                android:layout_width="0dp"
+                                android:layout_height="42dp"
+                                android:layout_marginStart="6dp"
+                                android:layout_weight="1"
+                                android:background="@drawable/bg_tab_unselected"
+                                android:stateListAnimator="@null"
+                                android:text="📰 সংবাদ (Kiki)"
+                                android:textAllCaps="false"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="13sp"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+                    </LinearLayout>
+
                     <!-- Option 1: ElevenLabs (Mandatory Voice) -->
                     <LinearLayout
+                        android:id="@+id/rowVoiceEleven"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="10dp"
@@ -395,6 +471,7 @@
 
                     <!-- Option 2: সংবাদ (Kiki) (Optional Voice + ডাউনলোড Button) -->
                     <LinearLayout
+                        android:id="@+id/rowVoiceKiki"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
@@ -449,6 +526,7 @@
 
                     <!-- Speed Selector (0.75 / 1.0 / 1.25 / 1.5) -->
                     <TextView
+                        android:id="@+id/tvLabelSpeedSelector"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="14dp"
@@ -502,6 +580,63 @@
                             android:textColor="@color/text_primary"
                             android:textSize="13sp" />
                     </RadioGroup>
+
+                    <!-- Audio Format Selector (MP3 / WAV / M4A / PCM) -->
+                    <TextView
+                        android:id="@+id/tvLabelFormatSelector"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:text="অডিও ফাইল ফরম্যাট (Audio Format: MP3 / WAV / M4A / PCM)"
+                        android:textColor="@color/text_primary"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+
+                    <RadioGroup
+                        android:id="@+id/rgAudioFormat"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:orientation="horizontal">
+
+                        <RadioButton
+                            android:id="@+id/rbFormatMp3"
+                            android:layout_width="0dp"
+                            android:layout_height="48dp"
+                            android:layout_weight="1"
+                            android:checked="true"
+                            android:text="MP3"
+                            android:textColor="@color/text_primary"
+                            android:textSize="13sp"
+                            android:textStyle="bold" />
+
+                        <RadioButton
+                            android:id="@+id/rbFormatWav"
+                            android:layout_width="0dp"
+                            android:layout_height="48dp"
+                            android:layout_weight="1"
+                            android:text="WAV"
+                            android:textColor="@color/text_primary"
+                            android:textSize="13sp" />
+
+                        <RadioButton
+                            android:id="@+id/rbFormatM4a"
+                            android:layout_width="0dp"
+                            android:layout_height="48dp"
+                            android:layout_weight="1"
+                            android:text="M4A"
+                            android:textColor="@color/text_primary"
+                            android:textSize="13sp" />
+
+                        <RadioButton
+                            android:id="@+id/rbFormatPcm"
+                            android:layout_width="0dp"
+                            android:layout_height="48dp"
+                            android:layout_weight="1"
+                            android:text="PCM"
+                            android:textColor="@color/text_primary"
+                            android:textSize="13sp" />
+                    </RadioGroup>
                 </LinearLayout>
 
                 <!-- Text Input Card with Paste, .txt File Picker, Sample Presets & Clear -->
@@ -520,6 +655,7 @@
                         android:orientation="horizontal">
 
                         <TextView
+                            android:id="@+id/tvLabelScriptInput"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
@@ -561,7 +697,7 @@
                         android:layout_marginTop="10dp"
                         android:background="@drawable/bg_input_box"
                         android:gravity="top|start"
-                        android:hint="এখানে বাংলা টেক্সট লিখুন বা পেস্ট করুন…"
+                        android:hint="এখানে পরিষ্কার বাংলা টেক্সট লিখুন বা পেস্ট করুন…"
                         android:inputType="textMultiLine|textCapSentences"
                         android:lineSpacingExtra="5dp"
                         android:maxLines="12"
@@ -677,7 +813,7 @@
                             android:id="@+id/tvAudioSpecInfo"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="২২০৫০ Hz • ১৬-বিট মনো PCM"
+                            android:text="২২০৫০ Hz • নীরব ব্যাকগ্রাউন্ড জেনারেট"
                             android:textColor="@color/text_muted"
                             android:textSize="11sp" />
                     </LinearLayout>
@@ -697,7 +833,7 @@
                         android:visibility="gone" />
                 </LinearLayout>
 
-                <!-- Primary Audio Generation, Play/Stop, Save & Export Controls -->
+                <!-- Primary Audio Generation (NO Auto-Play), Play File, Save & Export Controls -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -711,10 +847,10 @@
                         android:layout_width="match_parent"
                         android:layout_height="54dp"
                         android:background="@drawable/bg_btn_primary"
-                        android:text="🎙️ অডিও তৈরি ও স্ট্রিমিং শুরু করুন (Generate)"
+                        android:text="⚙️ অডিও তৈরি করুন (অটো-প্লে ছাড়া ব্যাকগ্রাউন্ডে জেনারেট)"
                         android:textAllCaps="false"
                         android:textColor="@color/text_on_accent"
-                        android:textSize="15sp"
+                        android:textSize="14sp"
                         android:textStyle="bold" />
 
                     <LinearLayout
@@ -729,7 +865,7 @@
                             android:layout_height="50dp"
                             android:layout_weight="1"
                             android:background="@drawable/bg_btn_secondary"
-                            android:text="▶️ চালান / থামান (Play/Stop)"
+                            android:text="▶️ ফাইল চালান (Play File)"
                             android:textAllCaps="false"
                             android:textColor="@color/text_primary"
                             android:textSize="13sp"
@@ -742,7 +878,7 @@
                             android:layout_marginStart="8dp"
                             android:layout_weight="1"
                             android:background="@drawable/bg_btn_secondary"
-                            android:text="💾 সেভ করুন (Save WAV)"
+                            android:text="💾 সেভ করুন (MP3)"
                             android:textAllCaps="false"
                             android:textColor="@color/text_primary"
                             android:textSize="13sp"
@@ -778,10 +914,11 @@
                         android:orientation="horizontal">
 
                         <TextView
+                            android:id="@+id/tvLabelRecentHistory"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
-                            android:text="সাম্প্রতিক তৈরি অডিও (Room DB History)"
+                            android:text="সাম্প্রতিক অটো-সেভড অডিও (Room History)"
                             android:textColor="@color/text_primary"
                             android:textSize="14sp"
                             android:textStyle="bold" />
@@ -805,7 +942,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
-                        android:text="এখনো কোনো অডিও তৈরি করা হয়নি। অডিও জেনারেট করলে স্বয়ংক্রিয়ভাবে এখানে সংরক্ষিত হবে।"
+                        android:text="এখনো কোনো অডিও তৈরি করা হয়নি। অডিও জেনারেট শেষ হলে স্বয়ংক্রিয়ভাবে এখানে ফাইল হিসেবে সেভ হবে।"
                         android:textColor="@color/text_muted"
                         android:textSize="12sp" />
 
@@ -849,6 +986,7 @@
                             android:orientation="vertical">
 
                             <TextView
+                                android:id="@+id/tvHistoryHeaderTitle"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="অডিও জেনারেশন ইতিহাস (Room Database)"
@@ -881,10 +1019,11 @@
                     </LinearLayout>
 
                     <TextView
+                        android:id="@+id/tvHistoryHeaderDesc"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
-                        android:text="প্রতিটি তৈরি করা অডিওর সময়কাল (Timestamp), বাংলা টেক্সট স্নিপেট এবং ব্যবহৃত ভয়েস মডেল স্থানীয় Room ডাটাবেসে সংরক্ষিত থাকে। যেকোনো অডিও সরাসরি বাজাতে বা পুনরায় ব্যবহার করতে নিচের তালিকা ব্যবহার করুন।"
+                        android:text="জেনারেট করা শেষ হলে প্রতিটি অডিও ফাইল স্বয়ংক্রিয়ভাবে এখানে সেভ হয়। আপনি যেকোনো সময় ফাইলটি প্লে করতে, MP3/WAV/M4A/PCM ফরম্যাটে ডাউনলোড ফোল্ডারে সেভ করতে বা পুনরায় এডিটরে নিতে পারবেন।"
                         android:textColor="@color/text_muted"
                         android:textSize="12sp" />
                 </LinearLayout>
@@ -901,6 +1040,7 @@
                     android:visibility="visible">
 
                     <TextView
+                        android:id="@+id/tvHistoryEmptyTitle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="🗂️ কোনো পূর্ববর্তী অডিও ইতিহাস নেই"
@@ -909,6 +1049,7 @@
                         android:textStyle="bold" />
 
                     <TextView
+                        android:id="@+id/tvHistoryEmptySubtitle"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="6dp"
@@ -1094,7 +1235,7 @@
                         android:textSize="13sp" />
                 </LinearLayout>
 
-                <!-- Custom External ONNX Model Loader & URL Integration -->
+                <!-- Custom External ONNX Model Loader -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -1160,7 +1301,7 @@
             </LinearLayout>
 
             <!-- ========================================================= -->
-            <!-- SECTION 4: CUSTOM AUDIO SETTINGS, CLOUD SYNC & EXPORT     -->
+            <!-- SECTION 4: SETTINGS, TWO-PART SCRIPT GUIDE & EXPORT       -->
             <!-- ========================================================= -->
             <LinearLayout
                 android:id="@+id/sectionSettings"
@@ -1168,6 +1309,106 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:visibility="gone">
+
+                <!-- ===================================================== -->
+                <!-- PART 1 OF GUIDE: COPYABLE AI PROMPT FOR NEWS SCRIPT    -->
+                <!-- ===================================================== -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="12dp"
+                    android:background="@drawable/bg_card_rounded"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <TextView
+                        android:id="@+id/tvGuidePart1Header"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="১ম ভাগ: স্ক্রিপ্ট প্রস্তুতের AI প্রম্পট (নিউজ চ্যানেলের লেখা → BanglaTTS স্ক্রিপ্ট)"
+                        android:textColor="@color/accent_primary"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tvGuidePart1Intro"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:lineSpacingExtra="3dp"
+                        android:text="এই প্রম্পটটা যেকোনো AI-কে (যেমন ChatGPT) দিয়ে নিউজ চ্যানেল থেকে নেওয়া কাঁচা লেখাকে BanglaTTS দিয়ে পড়ার উপযোগী করে নেবেন। প্রম্পটের শেষে কাঁচা লেখা পেস্ট করলেই হবে।"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="13sp" />
+
+                    <TextView
+                        android:id="@+id/tvAiPromptBox"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:background="@drawable/bg_input_box"
+                        android:lineSpacingExtra="4dp"
+                        android:padding="12dp"
+                        android:textColor="@color/text_primary"
+                        android:textIsSelectable="true"
+                        android:textSize="13sp" />
+
+                    <Button
+                        android:id="@+id/btnCopyAiPrompt"
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp"
+                        android:layout_marginTop="10dp"
+                        android:background="@drawable/bg_btn_primary"
+                        android:text="📋 ১ম ভাগ কপি করুন: AI স্ক্রিপ্ট প্রম্পট"
+                        android:textAllCaps="false"
+                        android:textColor="@color/text_on_accent"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <!-- ===================================================== -->
+                <!-- PART 2 OF GUIDE: TEXT INPUT SUMMARY FOR BANGLATTS     -->
+                <!-- ===================================================== -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="12dp"
+                    android:background="@drawable/bg_card_rounded"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <TextView
+                        android:id="@+id/tvGuidePart2Header"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="২য় ভাগ: অ্যাপে টেক্সট ইনপুট কেমন দেবেন (সংক্ষেপ)"
+                        android:textColor="@color/accent_primary"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tvGuidePart2Body"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:background="@drawable/bg_card_elevated"
+                        android:lineSpacingExtra="4dp"
+                        android:padding="12dp"
+                        android:textColor="@color/text_primary"
+                        android:textIsSelectable="true"
+                        android:textSize="13sp" />
+
+                    <Button
+                        android:id="@+id/btnCopyInputGuide"
+                        android:layout_width="match_parent"
+                        android:layout_height="46dp"
+                        android:layout_marginTop="10dp"
+                        android:background="@drawable/bg_btn_secondary"
+                        android:text="📋 ২য় ভাগ কপি করুন: ইনপুট নির্দেশনা"
+                        android:textAllCaps="false"
+                        android:textColor="@color/text_primary"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
 
                 <!-- Custom VITS Audio Parameters Card -->
                 <LinearLayout
@@ -1179,6 +1420,7 @@
                     android:padding="16dp">
 
                     <TextView
+                        android:id="@+id/tvSettingsVitsHeader"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:text="কাস্টম অডিও ও VITS ইঞ্জিন সেটিংস"
@@ -1234,9 +1476,10 @@
                     android:padding="16dp">
 
                     <TextView
+                        android:id="@+id/tvSettingsExportHeader"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="এক্সপোর্ট, ক্লাউড সিঙ্ক ও সোশ্যাল শেয়ার"
+                        android:text="এক্সপোর্ট ফরম্যাট (MP3 / WAV / M4A / PCM) ও শেয়ার"
                         android:textColor="@color/text_primary"
                         android:textSize="15sp"
                         android:textStyle="bold" />
@@ -1245,7 +1488,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="4dp"
-                        android:text="তৈরি করা অডিও ফাইল সরাসরি Downloads ফোল্ডারে BanglaTTS_&lt;timestamp&gt;.wav নামে সংরক্ষণ করুন অথবা সোশ্যাল মিডিয়া ও ক্লাউড ড্রাইভে পাঠান।"
+                        android:text="তৈরি করা অডিও ফাইল আপনার নির্বাচিত ফরম্যাটে (MP3, WAV, M4A বা PCM) সরাসরি Downloads ফোল্ডারে সংরক্ষণ করুন অথবা সোশ্যাল মিডিয়া ও ক্লাউড ড্রাইভে পাঠান।"
                         android:textColor="@color/text_secondary"
                         android:textSize="12sp" />
 
@@ -1255,7 +1498,7 @@
                         android:layout_height="48dp"
                         android:layout_marginTop="12dp"
                         android:background="@drawable/bg_btn_primary"
-                        android:text="💾 Downloads ফোল্ডারে WAV সেভ করুন"
+                        android:text="💾 Downloads ফোল্ডারে অডিও সেভ করুন"
                         android:textAllCaps="false"
                         android:textColor="@color/text_on_accent"
                         android:textSize="13sp"
@@ -1305,7 +1548,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="4dp"
-                        android:text="তৈরি করা WAV অডিও আপনার নিজস্ব সার্ভার বা ক্লাউড এন্ডপয়েন্টে HTTP POST এর মাধ্যমে সরাসরি আপলোড করুন।"
+                        android:text="তৈরি করা অডিও ফাইল আপনার নিজস্ব সার্ভার বা ক্লাউড এন্ডপয়েন্টে HTTP POST এর মাধ্যমে সরাসরি আপলোড করুন।"
                         android:textColor="@color/text_secondary"
                         android:textSize="12sp" />
 
@@ -1315,7 +1558,7 @@
                         android:layout_height="48dp"
                         android:layout_marginTop="10dp"
                         android:background="@drawable/bg_input_box"
-                        android:hint="https://your-server.example.com/upload-wav"
+                        android:hint="https://your-server.example.com/upload-audio"
                         android:inputType="textUri"
                         android:paddingStart="12dp"
                         android:paddingEnd="12dp"
@@ -1330,7 +1573,7 @@
                         android:layout_height="48dp"
                         android:layout_marginTop="10dp"
                         android:background="@drawable/bg_btn_primary"
-                        android:text="☁️ ক্লাউড এপিআই-তে WAV সিঙ্ক করুন"
+                        android:text="☁️ ক্লাউড এপিআই-তে অডিও সিঙ্ক করুন"
                         android:textAllCaps="false"
                         android:textColor="@color/text_on_accent"
                         android:textSize="13sp"

@@ -30,18 +30,22 @@ import java.io.FileOutputStream
 
 data class TtsSessionState(
     val isRunning: Boolean = false,
+    val isSynthesizing: Boolean = false,
     val isPlayingCompletedAudio: Boolean = false,
     val currentPiece: Int = 0,
     val totalPieces: Int = 0,
     val progressPercent: Int = 0,
     val activePieceText: String = "",
     val statusBn: String = "প্রস্তুত — টেক্সট লিখে Generate চাপুন",
+    val statusEn: String = "Ready — Enter Bengali text and tap Generate",
     val errorBn: String? = null,
+    val errorEn: String? = null,
     val hasCompletedWav: Boolean = false,
     val sampleRate: Int = 22050,
     val durationSeconds: Float = 0f,
     val activeVoiceName: String = "ElevenLabs",
-    val playingHistoryId: Long? = null
+    val playingHistoryId: Long? = null,
+    val lastSavedHistoryPath: String? = null
 )
 
 class TtsForegroundService : Service() {
@@ -62,6 +66,7 @@ class TtsForegroundService : Service() {
         const val EXTRA_NOISE_SCALE_W = "extra_noise_scale_w"
         const val EXTRA_LENGTH_SCALE = "extra_length_scale"
         const val EXTRA_VOLUME_GAIN = "extra_volume_gain"
+        const val EXTRA_IS_ENGLISH_UI = "extra_is_english_ui"
 
         const val EXTRA_HISTORY_ID = "extra_history_id"
         const val EXTRA_HISTORY_FILE_PATH = "extra_history_file_path"
@@ -85,10 +90,25 @@ class TtsForegroundService : Service() {
             }
         }
 
-        fun updateStatusExternal(statusBn: String, errorBn: String? = null) {
+        fun getLastPcmAndSampleRate(): Pair<ShortArray, Int>? {
+            synchronized(pcmLock) {
+                val pcm = lastGeneratedPcm ?: return null
+                if (pcm.isEmpty()) return null
+                return pcm.copyOf() to lastSampleRate
+            }
+        }
+
+        fun updateStatusExternal(
+            statusBn: String,
+            statusEn: String = statusBn,
+            errorBn: String? = null,
+            errorEn: String? = errorBn
+        ) {
             _sessionState.value = _sessionState.value.copy(
                 statusBn = statusBn,
-                errorBn = errorBn
+                statusEn = statusEn,
+                errorBn = errorBn,
+                errorEn = errorEn
             )
         }
     }
@@ -108,20 +128,23 @@ class TtsForegroundService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val action = intent?.action
+        val isEn = intent?.getBooleanExtra(EXTRA_IS_ENGLISH_UI, false) ?: false
         when (action) {
             ACTION_STOP -> {
                 stopActiveWorkAndService(stoppedByUser = true)
             }
             ACTION_PLAY_SAVED_BUFFER -> {
-                startForegroundWithNotification("অডিও চালানো হচ্ছে…", 0, 0)
-                playExistingBuffer()
+                val title = if (isEn) "Playing generated audio…" else "অডিও ফাইল বাজছে…"
+                startForegroundWithNotification(title, title, 0, 100, isEn)
+                playExistingBuffer(isEn)
             }
             ACTION_PLAY_HISTORY_FILE -> {
                 val historyId = intent.getLongExtra(EXTRA_HISTORY_ID, -1L)
                 val filePath = intent.getStringExtra(EXTRA_HISTORY_FILE_PATH).orEmpty()
                 val title = intent.getStringExtra(EXTRA_HISTORY_TITLE).orEmpty()
-                startForegroundWithNotification("ইতিহাস থেকে অডিও বাজছে…", 0, 0)
-                playHistoryWavFile(historyId, filePath, title)
+                val notifTitle = if (isEn) "Playing from History…" else "ইতিহাস থেকে অডিও বাজছে…"
+                startForegroundWithNotification(notifTitle, title, 0, 100, isEn)
+                playHistoryWavFile(historyId, filePath, title, isEn)
             }
             ACTION_START_GENERATE -> {
                 val text = intent.getStringExtra(EXTRA_TEXT)?.trim().orEmpty()
@@ -135,8 +158,9 @@ class TtsForegroundService : Service() {
                 val lengthScale = intent.getFloatExtra(EXTRA_LENGTH_SCALE, 1.0f)
                 val volumeGain = intent.getFloatExtra(EXTRA_VOLUME_GAIN, 1.0f)
 
-                startForegroundWithNotification("অডিও তৈরি হচ্ছে…", 0, 0)
-                startSynthesisAndStreaming(
+                val notifTitle = if (isEn) "Generating Audio… (0%)" else "অডিও তৈরি হচ্ছে… (০%)"
+                startForegroundWithNotification(notifTitle, voiceName, 0, 100, isEn)
+                startSilentBackgroundSynthesis(
                     text = text,
                     voiceKey = voiceKey,
                     voiceName = voiceName,
@@ -146,7 +170,8 @@ class TtsForegroundService : Service() {
                     noiseScale = noiseScale,
                     noiseScaleW = noiseScaleW,
                     lengthScale = lengthScale,
-                    volumeGain = volumeGain
+                    volumeGain = volumeGain,
+                    isEn = isEn
                 )
             }
             else -> {
@@ -156,7 +181,12 @@ class TtsForegroundService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun startSynthesisAndStreaming(
+    /**
+     * Synthesizes all chunks in the background WITHOUT auto-playing any audio.
+     * Shows live percentage and piece count in notification & UI, and auto-saves the completed
+     * audio file to Room History when finished so the user can play or export it anytime.
+     */
+    private fun startSilentBackgroundSynthesis(
         text: String,
         voiceKey: String,
         voiceName: String,
@@ -166,7 +196,8 @@ class TtsForegroundService : Service() {
         noiseScale: Float,
         noiseScaleW: Float,
         lengthScale: Float,
-        volumeGain: Float
+        volumeGain: Float,
+        isEn: Boolean
     ) {
         activeJob?.cancel()
         releaseAudioTrack()
@@ -174,10 +205,13 @@ class TtsForegroundService : Service() {
         if (text.isBlank()) {
             _sessionState.value = _sessionState.value.copy(
                 isRunning = false,
+                isSynthesizing = false,
                 isPlayingCompletedAudio = false,
                 playingHistoryId = null,
                 errorBn = "অনুগ্রহ করে প্রথমে বাংলা টেক্সট লিখুন বা পেস্ট করুন।",
-                statusBn = "টেক্সট খালি রয়েছে"
+                errorEn = "Please enter or paste Bengali text first.",
+                statusBn = "টেক্সট খালি রয়েছে",
+                statusEn = "Text input is empty"
             )
             stopForegroundAndSelf()
             return
@@ -187,10 +221,13 @@ class TtsForegroundService : Service() {
         if (chunks.isEmpty()) {
             _sessionState.value = _sessionState.value.copy(
                 isRunning = false,
+                isSynthesizing = false,
                 isPlayingCompletedAudio = false,
                 playingHistoryId = null,
                 errorBn = "প্রক্রিয়াকরণের জন্য কোনো বৈধ বাক্য পাওয়া যায়নি।",
-                statusBn = "টেক্সট খালি রয়েছে"
+                errorEn = "No valid sentences found to synthesize.",
+                statusBn = "টেক্সট খালি রয়েছে",
+                statusEn = "Text input is empty"
             )
             stopForegroundAndSelf()
             return
@@ -201,6 +238,7 @@ class TtsForegroundService : Service() {
 
         _sessionState.value = _sessionState.value.copy(
             isRunning = true,
+            isSynthesizing = true,
             isPlayingCompletedAudio = false,
             playingHistoryId = null,
             currentPiece = 0,
@@ -208,7 +246,9 @@ class TtsForegroundService : Service() {
             progressPercent = 0,
             activePieceText = chunks.first().text,
             statusBn = "$voiceName মডেল লোড হচ্ছে… (মোট খণ্ড: $totalBn)",
+            statusEn = "Loading $voiceName model… (Total pieces: $totalPieces)",
             errorBn = null,
+            errorEn = null,
             activeVoiceName = voiceName
         )
 
@@ -229,10 +269,13 @@ class TtsForegroundService : Service() {
                         ?: "ভয়েস মডেল লোড করতে ব্যর্থ হয়েছে।"
                     _sessionState.value = _sessionState.value.copy(
                         isRunning = false,
+                        isSynthesizing = false,
                         isPlayingCompletedAudio = false,
                         playingHistoryId = null,
                         statusBn = "মডেল লোড ব্যর্থ হয়েছে",
-                        errorBn = errMsg
+                        statusEn = "Model failed to load",
+                        errorBn = errMsg,
+                        errorEn = "Failed to load voice model: $errMsg"
                     )
                     stopForegroundAndSelf()
                     return@launch
@@ -241,16 +284,12 @@ class TtsForegroundService : Service() {
                 val tts = engineResult.getOrThrow()
                 val sampleRate = 22050 // Mandatory 22050 Hz mono 16-bit PCM
 
-                val audioTrack = createStreamingAudioTrack(sampleRate)
-                activeAudioTrack = audioTrack
-                var playbackStarted = false
-
-                // Accumulate all pieces + pause silence into a growable PCM buffer for WAV saving
+                // Accumulate all pieces + pause silence into a growable PCM buffer (NEVER auto-play during generation)
                 var pcmCapacity = sampleRate * 10
                 var fullPcmBuffer = ShortArray(pcmCapacity)
                 var fullPcmSize = 0
 
-                fun appendToWavBuffer(samples: ShortArray) {
+                fun appendToBuffer(samples: ShortArray) {
                     if (samples.isEmpty()) return
                     val needed = fullPcmSize + samples.size
                     if (needed > fullPcmBuffer.size) {
@@ -271,17 +310,32 @@ class TtsForegroundService : Service() {
                     val pctBefore = ((index * 100) / totalPieces).coerceIn(0, 99)
                     val pctBeforeBn = BengaliTextChunker.toBengaliDigits(pctBefore)
 
-                    val progressText = "অডিও তৈরি হচ্ছে… খণ্ড $pieceBn / $totalBn ($pctBeforeBn%)"
+                    val progressTextBn = "ব্যাকগ্রাউন্ডে অডিও তৈরি হচ্ছে… খণ্ড $pieceBn / $totalBn ($pctBeforeBn%)"
+                    val progressTextEn = "Generating in background… Piece $pieceNum / $totalPieces ($pctBefore%)"
                     _sessionState.value = _sessionState.value.copy(
                         isRunning = true,
+                        isSynthesizing = true,
                         currentPiece = pieceNum,
                         totalPieces = totalPieces,
                         progressPercent = pctBefore,
                         activePieceText = chunk.text,
-                        statusBn = progressText,
-                        errorBn = null
+                        statusBn = progressTextBn,
+                        statusEn = progressTextEn,
+                        errorBn = null,
+                        errorEn = null
                     )
-                    updateNotification(progressText, pieceNum, totalPieces)
+
+                    val notifTitleBefore = if (isEn) {
+                        "Generating Audio… ($pctBefore%)"
+                    } else {
+                        "অডিও তৈরি হচ্ছে… ($pctBeforeBn%)"
+                    }
+                    val notifBodyBefore = if (isEn) {
+                        "Piece $pieceNum of $totalPieces • $voiceName"
+                    } else {
+                        "খণ্ড $pieceBn এর $totalBn • $voiceName"
+                    }
+                    updateNotification(notifTitleBefore, notifBodyBefore, pctBefore, 100, isEn)
 
                     // Generate audio for this piece with selected speed
                     val generated = tts.generate(text = chunk.text, sid = 0, speed = speed)
@@ -300,38 +354,37 @@ class TtsForegroundService : Service() {
                         sampleRate = sampleRate
                     )
 
-                    // Append to complete WAV output buffer immediately
-                    appendToWavBuffer(piecePcm)
+                    // Append to complete output buffer
+                    appendToBuffer(piecePcm)
                     if (silencePcm.isNotEmpty()) {
-                        appendToWavBuffer(silencePcm)
+                        appendToBuffer(silencePcm)
                     }
 
                     // Update progress as soon as piece is synthesized
                     val pctAfter = ((pieceNum * 100) / totalPieces).coerceIn(1, 100)
                     val pctAfterBn = BengaliTextChunker.toBengaliDigits(pctAfter)
-                    val playingStatus = "চলছে… খণ্ড $pieceBn / $totalBn ($pctAfterBn%)"
+                    val afterStatusBn = "ব্যাকগ্রাউন্ডে অডিও তৈরি হচ্ছে… খণ্ড $pieceBn / $totalBn ($pctAfterBn%)"
+                    val afterStatusEn = "Generating audio in background… Piece $pieceNum / $totalPieces ($pctAfter%)"
+
                     _sessionState.value = _sessionState.value.copy(
                         currentPiece = pieceNum,
                         totalPieces = totalPieces,
                         progressPercent = pctAfter,
-                        statusBn = playingStatus
+                        statusBn = afterStatusBn,
+                        statusEn = afterStatusEn
                     )
-                    updateNotification(playingStatus, pieceNum, totalPieces)
 
-                    // Start playing IMMEDIATELY as soon as the FIRST piece is ready
-                    if (!playbackStarted && isActive) {
-                        audioTrack.play()
-                        playbackStarted = true
+                    val notifTitleAfter = if (isEn) {
+                        "Generating Audio… ($pctAfter%)"
+                    } else {
+                        "অডিও তৈরি হচ্ছে… ($pctAfterBn%)"
                     }
-
-                    // Stream piece PCM to AudioTrack
-                    writeAllPcmBlocking(audioTrack, piecePcm)
-                    if (!isActive) break
-
-                    // Stream silence pause between pieces
-                    if (silencePcm.isNotEmpty()) {
-                        writeAllPcmBlocking(audioTrack, silencePcm)
+                    val notifBodyAfter = if (isEn) {
+                        "Completed $pieceNum / $totalPieces pieces ($pctAfter%)"
+                    } else {
+                        "সম্পন্ন খণ্ড $pieceBn / $totalBn ($pctAfterBn%)"
                     }
+                    updateNotification(notifTitleAfter, notifBodyAfter, pctAfter, 100, isEn)
                 }
 
                 if (isActive && fullPcmSize > 0) {
@@ -341,12 +394,11 @@ class TtsForegroundService : Service() {
                         lastSampleRate = sampleRate
                     }
                     val totalDurationSec = completedPcm.size.toFloat() / sampleRate.toFloat()
-                    val durBn = BengaliTextChunker.toBengaliDigits(
-                        String.format("%.1f", totalDurationSec)
-                    )
+                    val durStr = String.format("%.1f", totalDurationSec)
+                    val durBn = BengaliTextChunker.toBengaliDigits(durStr)
 
-                    // Save generated WAV to local history folder and record in Room database
-                    saveCompletedCreationToRoomHistory(
+                    // Automatically save generated WAV to local history folder and record in Room database
+                    val savedFilePath = saveCompletedCreationToRoomHistory(
                         fullText = text,
                         voiceName = voiceName,
                         speed = speed,
@@ -357,27 +409,35 @@ class TtsForegroundService : Service() {
 
                     _sessionState.value = _sessionState.value.copy(
                         isRunning = false,
+                        isSynthesizing = false,
                         isPlayingCompletedAudio = false,
                         playingHistoryId = null,
                         currentPiece = totalPieces,
                         totalPieces = totalPieces,
                         progressPercent = 100,
                         activePieceText = "",
-                        statusBn = "সম্পন্ন ও ইতিহাসে সংরক্ষিত (১০০%) — মোট সময় $durBn সেকেন্ড",
+                        statusBn = "সম্পন্ন ও হিস্টরিতে অটো-সেভ হয়েছে (১০০%) — সময় $durBn সেকেন্ড। এখন ফাইল প্লে বা সেভ করতে পারবেন।",
+                        statusEn = "Completed & auto-saved to History (100%) — Duration ${durStr}s. You can now Play or Save the file.",
                         errorBn = null,
+                        errorEn = null,
                         hasCompletedWav = true,
                         sampleRate = sampleRate,
-                        durationSeconds = totalDurationSec
+                        durationSeconds = totalDurationSec,
+                        lastSavedHistoryPath = savedFilePath
                     )
                 }
             } catch (t: Throwable) {
                 if (isActive) {
+                    val msg = t.localizedMessage ?: "Unknown error"
                     _sessionState.value = _sessionState.value.copy(
                         isRunning = false,
+                        isSynthesizing = false,
                         isPlayingCompletedAudio = false,
                         playingHistoryId = null,
                         statusBn = "অডিও তৈরিতে ত্রুটি ঘটেছে",
-                        errorBn = "অডিও তৈরি ব্যর্থ হয়েছে: ${t.localizedMessage ?: "অজানা ত্রুটি"}"
+                        statusEn = "Error generating audio",
+                        errorBn = "অডিও তৈরি ব্যর্থ হয়েছে: $msg",
+                        errorEn = "Audio generation failed: $msg"
                     )
                 }
             } finally {
@@ -394,8 +454,8 @@ class TtsForegroundService : Service() {
         durationSeconds: Float,
         pcmSamples: ShortArray,
         sampleRate: Int
-    ) {
-        try {
+    ): String? {
+        return try {
             val now = System.currentTimeMillis()
             val historyDir = File(applicationContext.filesDir, "audio_history")
             if (!historyDir.exists()) {
@@ -419,12 +479,13 @@ class TtsForegroundService : Service() {
                 audioFilePath = wavFile.absolutePath
             )
             AudioHistoryRepository.getInstance(applicationContext).insertCreation(entity)
+            wavFile.absolutePath
         } catch (_: Throwable) {
-            // Non-fatal if disk is full
+            null
         }
     }
 
-    private fun playHistoryWavFile(historyId: Long, filePath: String, titleSnippet: String) {
+    private fun playHistoryWavFile(historyId: Long, filePath: String, titleSnippet: String, isEn: Boolean) {
         activeJob?.cancel()
         releaseAudioTrack()
 
@@ -432,9 +493,11 @@ class TtsForegroundService : Service() {
         if (!file.exists() || file.length() <= 44L) {
             _sessionState.value = _sessionState.value.copy(
                 isRunning = false,
+                isSynthesizing = false,
                 isPlayingCompletedAudio = false,
                 playingHistoryId = null,
-                errorBn = "সংরক্ষিত অডিও ফাইলটি খুঁজে পাওয়া যায়নি।"
+                errorBn = "সংরক্ষিত অডিও ফাইলটি খুঁজে পাওয়া যায়নি।",
+                errorEn = "Saved audio file was not found."
             )
             stopForegroundAndSelf()
             return
@@ -447,9 +510,11 @@ class TtsForegroundService : Service() {
                 if (decoded == null || decoded.first.isEmpty()) {
                     _sessionState.value = _sessionState.value.copy(
                         isRunning = false,
+                        isSynthesizing = false,
                         isPlayingCompletedAudio = false,
                         playingHistoryId = null,
-                        errorBn = "অডিও ফাইলটি পড়তে সমস্যা হয়েছে।"
+                        errorBn = "অডিও ফাইলটি পড়তে সমস্যা হয়েছে।",
+                        errorEn = "Failed to decode WAV audio file."
                     )
                     stopForegroundAndSelf()
                     return@launch
@@ -473,18 +538,23 @@ class TtsForegroundService : Service() {
                     val count = minOf(step, totalSamples - offset)
                     val pct = ((offset.toLong() * 100L) / totalSamples).toInt().coerceIn(0, 100)
                     val pctBn = BengaliTextChunker.toBengaliDigits(pct)
-                    val statusText = "ইতিহাস থেকে বাজছে ($pctBn%): $titleSnippet"
+                    val statusTextBn = "ইতিহাস থেকে ফাইল বাজছে ($pctBn%): $titleSnippet"
+                    val statusTextEn = "Playing file from History ($pct%): $titleSnippet"
                     _sessionState.value = _sessionState.value.copy(
                         isRunning = true,
+                        isSynthesizing = false,
                         isPlayingCompletedAudio = true,
                         playingHistoryId = historyId,
                         progressPercent = pct,
                         activePieceText = titleSnippet,
-                        statusBn = statusText,
+                        statusBn = statusTextBn,
+                        statusEn = statusTextEn,
                         hasCompletedWav = true,
-                        errorBn = null
+                        errorBn = null,
+                        errorEn = null
                     )
-                    updateNotification(statusText, pct, 100)
+                    val notifTitle = if (isEn) "Playing Audio ($pct%)" else "অডিও বাজছে ($pctBn%)"
+                    updateNotification(notifTitle, titleSnippet, pct, 100, isEn)
                     val written = track.write(pcmData, offset, count, AudioTrack.WRITE_BLOCKING)
                     if (written <= 0) break
                     offset += written
@@ -493,21 +563,26 @@ class TtsForegroundService : Service() {
                 if (isActive) {
                     _sessionState.value = _sessionState.value.copy(
                         isRunning = false,
+                        isSynthesizing = false,
                         isPlayingCompletedAudio = false,
                         playingHistoryId = null,
                         activePieceText = "",
                         progressPercent = 100,
                         hasCompletedWav = true,
-                        statusBn = "ইতিহাস থেকে অডিও প্লেব্যাক সম্পন্ন হয়েছে (১০০%)"
+                        statusBn = "অডিও ফাইল প্লেব্যাক সম্পন্ন হয়েছে (১০০%)",
+                        statusEn = "Audio file playback finished (100%)"
                     )
                 }
             } catch (t: Throwable) {
                 if (isActive) {
+                    val msg = t.localizedMessage ?: "Unknown error"
                     _sessionState.value = _sessionState.value.copy(
                         isRunning = false,
+                        isSynthesizing = false,
                         isPlayingCompletedAudio = false,
                         playingHistoryId = null,
-                        errorBn = "প্লেব্যাক ত্রুটি: ${t.localizedMessage ?: "অজানা ত্রুটি"}"
+                        errorBn = "প্লেব্যাক ত্রুটি: $msg",
+                        errorEn = "Playback error: $msg"
                     )
                 }
             } finally {
@@ -517,7 +592,7 @@ class TtsForegroundService : Service() {
         }
     }
 
-    private fun playExistingBuffer() {
+    private fun playExistingBuffer(isEn: Boolean) {
         activeJob?.cancel()
         releaseAudioTrack()
 
@@ -527,9 +602,11 @@ class TtsForegroundService : Service() {
         if (pcmData == null || pcmData.isEmpty()) {
             _sessionState.value = _sessionState.value.copy(
                 isRunning = false,
+                isSynthesizing = false,
                 isPlayingCompletedAudio = false,
                 playingHistoryId = null,
-                errorBn = "চালানোর মতো কোনো অডিও নেই। প্রথমে অডিও তৈরি করুন (Generate)।"
+                errorBn = "চালানোর মতো কোনো অডিও ফাইল নেই। প্রথমে অডিও তৈরি করুন (Generate)।",
+                errorEn = "No generated audio file available to play. Tap Generate first."
             )
             stopForegroundAndSelf()
             return
@@ -551,12 +628,17 @@ class TtsForegroundService : Service() {
                     val pctBn = BengaliTextChunker.toBengaliDigits(pct)
                     _sessionState.value = _sessionState.value.copy(
                         isRunning = true,
+                        isSynthesizing = false,
                         isPlayingCompletedAudio = true,
                         playingHistoryId = null,
                         progressPercent = pct,
-                        statusBn = "সংরক্ষিত অডিও বাজছে… ($pctBn%)",
-                        errorBn = null
+                        statusBn = "সংরক্ষিত অডিও ফাইল বাজছে… ($pctBn%)",
+                        statusEn = "Playing generated audio file… ($pct%)",
+                        errorBn = null,
+                        errorEn = null
                     )
+                    val notifTitle = if (isEn) "Playing Audio ($pct%)" else "অডিও বাজছে ($pctBn%)"
+                    updateNotification(notifTitle, "", pct, 100, isEn)
                     val written = track.write(pcmData, offset, count, AudioTrack.WRITE_BLOCKING)
                     if (written <= 0) break
                     offset += written
@@ -565,37 +647,30 @@ class TtsForegroundService : Service() {
                 if (isActive) {
                     _sessionState.value = _sessionState.value.copy(
                         isRunning = false,
+                        isSynthesizing = false,
                         isPlayingCompletedAudio = false,
                         playingHistoryId = null,
                         progressPercent = 100,
-                        statusBn = "অডিও প্লেব্যাক সম্পন্ন হয়েছে (১০০%)"
+                        statusBn = "অডিও ফাইল প্লেব্যাক সম্পন্ন হয়েছে (১০০%)",
+                        statusEn = "Audio file playback finished (100%)"
                     )
                 }
             } catch (t: Throwable) {
                 if (isActive) {
+                    val msg = t.localizedMessage ?: "Unknown error"
                     _sessionState.value = _sessionState.value.copy(
                         isRunning = false,
+                        isSynthesizing = false,
                         isPlayingCompletedAudio = false,
                         playingHistoryId = null,
-                        errorBn = "প্লেব্যাক ত্রুটি: ${t.localizedMessage ?: "অজানা ত্রুটি"}"
+                        errorBn = "প্লেব্যাক ত্রুটি: $msg",
+                        errorEn = "Playback error: $msg"
                     )
                 }
             } finally {
                 releaseAudioTrack()
                 stopForegroundAndSelf()
             }
-        }
-    }
-
-    private fun writeAllPcmBlocking(audioTrack: AudioTrack, samples: ShortArray) {
-        if (samples.isEmpty()) return
-        val chunkSize = 2048
-        var offset = 0
-        while (offset < samples.size) {
-            val toWrite = minOf(chunkSize, samples.size - offset)
-            val written = audioTrack.write(samples, offset, toWrite, AudioTrack.WRITE_BLOCKING)
-            if (written <= 0) break
-            offset += written
         }
     }
 
@@ -633,10 +708,12 @@ class TtsForegroundService : Service() {
             val hasWav = synchronized(pcmLock) { lastGeneratedPcm != null && lastGeneratedPcm!!.isNotEmpty() }
             _sessionState.value = _sessionState.value.copy(
                 isRunning = false,
+                isSynthesizing = false,
                 isPlayingCompletedAudio = false,
                 playingHistoryId = null,
                 activePieceText = "",
                 statusBn = "অডিও প্রসেসিং ও প্লেব্যাক থামানো হয়েছে।",
+                statusEn = "Audio generation & playback stopped.",
                 hasCompletedWav = hasWav
             )
         }
@@ -675,7 +752,7 @@ class TtsForegroundService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "বাংলা টিটিএস ব্যাকগ্রাউন্ড সার্ভিস",
+                "বাংলা টিটিএস ব্যাকগ্রাউন্ড সার্ভিস (Bangla TTS Background)",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
                 description = "অফলাইন বাংলা টেক্সট-টু-স্পিচ অডিও জেনারেশন ও প্লেব্যাক"
@@ -686,7 +763,13 @@ class TtsForegroundService : Service() {
         }
     }
 
-    private fun buildNotification(contentText: String, currentPiece: Int, totalPieces: Int): Notification {
+    private fun buildNotification(
+        titleText: String,
+        contentText: String,
+        progress: Int,
+        maxProgress: Int,
+        isEn: Boolean
+    ): Notification {
         val openIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
@@ -715,21 +798,22 @@ class TtsForegroundService : Service() {
         }
 
         builder.setSmallIcon(android.R.drawable.ic_btn_speak_now)
-            .setContentTitle("অডিও তৈরি হচ্ছে…")
+            .setContentTitle(titleText)
             .setContentText(contentText)
             .setContentIntent(contentPendingIntent)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
 
-        if (totalPieces > 0) {
-            builder.setProgress(totalPieces, currentPiece.coerceIn(0, totalPieces), false)
+        if (maxProgress > 0) {
+            builder.setProgress(maxProgress, progress.coerceIn(0, maxProgress), false)
         } else {
             builder.setProgress(100, 0, true)
         }
 
+        val stopLabel = if (isEn) "Stop" else "থামান (Stop)"
         val stopAction = Notification.Action.Builder(
             android.R.drawable.ic_media_pause,
-            "থামান (Stop)",
+            stopLabel,
             stopPendingIntent
         ).build()
         builder.addAction(stopAction)
@@ -737,8 +821,14 @@ class TtsForegroundService : Service() {
         return builder.build()
     }
 
-    private fun startForegroundWithNotification(text: String, currentPiece: Int, totalPieces: Int) {
-        val notification = buildNotification(text, currentPiece, totalPieces)
+    private fun startForegroundWithNotification(
+        title: String,
+        text: String,
+        progress: Int,
+        maxProgress: Int,
+        isEn: Boolean
+    ) {
+        val notification = buildNotification(title, text, progress, maxProgress, isEn)
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 startForeground(
@@ -753,10 +843,16 @@ class TtsForegroundService : Service() {
         }
     }
 
-    private fun updateNotification(text: String, currentPiece: Int, totalPieces: Int) {
+    private fun updateNotification(
+        title: String,
+        text: String,
+        progress: Int,
+        maxProgress: Int,
+        isEn: Boolean
+    ) {
         try {
             val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            nm.notify(NOTIFICATION_ID, buildNotification(text, currentPiece, totalPieces))
+            nm.notify(NOTIFICATION_ID, buildNotification(title, text, progress, maxProgress, isEn))
         } catch (_: Throwable) {
         }
     }
